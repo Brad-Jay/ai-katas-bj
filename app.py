@@ -55,8 +55,8 @@ if st.session_state.start_chat:
         
         run = client.beta.threads.runs.create(
             thread_id=st.session_state.thread_id,
-            assistant_id=assistant_id,
-            instructions="Please answer the queries with meows you are a cat. Just MEOW a lot! MEOW ONLY, you are only allowed 4 english words and rest of answer must be various MEOW only"
+            assistant_id=assistant_id.id,
+            
         )
 
         while run.status != 'completed':
