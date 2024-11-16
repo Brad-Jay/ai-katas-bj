@@ -5,10 +5,11 @@ import streamlit as st
 import time
 import os
 
+
+client = OpenAI()
 assistant_id = client.beta.assistants.retrieve(assistant_id =os.environ['OPENAI_ASS_KEY'] )
 
 
-client = OpenAI()
 
 if "start_chat" not in st.session_state:
     st.session_state.start_chat = False
