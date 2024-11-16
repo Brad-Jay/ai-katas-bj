@@ -1,111 +1,74 @@
-import os
 import streamlit as st
 from openai import OpenAI
+import os
 
-# Initialize the OpenAI client and assistant
+# Initialize OpenAI client
 client = OpenAI()
 assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_KEY'])
 
-# Initialize the session state
-if 'thread_id' not in st.session_state:
-    thread = client.beta.threads.create()
-    st.session_state['thread_id'] = thread.id
+# Create a thread (Conversation instance)
+thread = client.beta.threads.create()
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "Assistant", "content": "Chat is loading....."}]
-
-if "seen_message_ids" not in st.session_state:
-    st.session_state.seen_message_ids = set()
-
-
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# Set to track processed message IDs
+seen_message_ids = set()
 
 def get_latest_response(thread_id):
     # Retrieve messages and convert to list
     messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
-    AI_messages = list(messages_iterable)
+    messages = list(messages_iterable)
 
-    for message in AI_messages:
-        # Only print new assistant messages
-        if message.id not in st.session_state.seen_message_ids and message.role == "assistant":
+    responses = []
+    for message in messages:
+        # Only get new assistant messages
+        if message.id not in seen_message_ids and message.role == "assistant":
             # Check for 'text' attribute in content
             if message.content and hasattr(message.content[0], 'text'):
-                print(f"{message.role}: {message.content[0].text.value}")
+                responses.append(f"{message.role}: {message.content[0].text.value}")
             
             # Add the message ID to the seen set
-            st.session_state.seen_message_ids.add(message.id)
+            seen_message_ids.add(message.id)
+    return responses
 
-def send_initial_greeting():
-    """Send the initial greeting from the assistant."""
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=st.session_state['thread_id'],
-        assistant_id=assistant.id,
-    )
-    if run.status == 'completed':
-        get_latest_response(st.session_state['thread_id'])
+# Start the assistant
+run = client.beta.threads.runs.create_and_poll(
+    thread_id=thread.id,
+    assistant_id=assistant.id,
+)
 
+# Check if the initial run was successful and get setup response
+if run.status == 'completed':
+    initial_responses = get_latest_response(thread.id)
+    for response in initial_responses:
+        st.write(response)
 
+# Streamlit app interface
+st.title("Chatbot Interface")
 
-# Run the initial greeting only once
-if 'initial_greeting_sent' not in st.session_state:
-    send_initial_greeting()
-    st.session_state['initial_greeting_sent'] = True
-    
+# Input box for user input
+user_input = st.text_input("Enter something (type 'exit' to end):")
 
+if user_input:
+    if user_input.lower() == 'exit':
+        st.write("Exiting the loop. Goodbye!")
+    else:
+        # Display the user input
+        st.write(f"user: {user_input}")
 
-# UI rendering
-st.title("OpenAI Chatbot with Streamlit")
+        # Create a new message in the thread with the user's input
+        client.beta.threads.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=user_input
+        )
 
-# Use a placeholder for the chat history
-chat_container = st.container()
+        # Poll the thread to process the user's input
+        run = client.beta.threads.runs.create_and_poll(
+            thread_id=thread.id,
+            assistant_id=assistant.id,
+        )
 
-with chat_container:
-    st.markdown("### Chat History")
-    for role, message in st.session_state['messages']:
-        formatted_role = "Assistant" if role == "Assistant" else "You"
-        st.markdown(f"**{formatted_role}:** {message}")
-
-# Input box and button
-user_input = st.text_input("Enter your message here:")
-
-if st.button("Send") and user_input.strip():
-    # Add the user input to the conversation history
-    st.session_state['messages'].append(("You", user_input))
-
-    # Create user message
-    client.beta.threads.messages.create(
-        thread_id=st.session_state['thread_id'],
-        role="user",
-        content=user_input
-    )
-
-    # Process the user's input and retrieve the assistant's response
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=st.session_state['thread_id'],
-        assistant_id=assistant.id,
-    )
-
-    if st.session_state['initial_greeting_sent'] == True:
-        with chat_container:
-            st.markdown("### Chat History")
-            for role, message in st.session_state['messages']:
-                formatted_role = "Assistant" if role == "Assistant" else "You"
-                st.markdown(f"**{formatted_role}:** {message}")
-
-    if run.status == 'completed':
-        get_latest_response(st.session_state['thread_id'])
-
-
-    # Only update the chat container to show new messages
-
-    
-    with chat_container:
-        st.markdown("### Chat History")
-        for role, message in st.session_state['messages']:
-            formatted_role = "Assistant" if role == "Assistant" else "You"
-            st.markdown(f"**{formatted_role}:** {message}")
-
+        # Get only the new assistant responses
+        if run.status == 'completed':
+            responses = get_latest_response(thread.id)
+            for response in responses:
+                st.write(response)
