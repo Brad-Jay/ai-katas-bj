@@ -84,6 +84,13 @@ if st.button("Send") and user_input.strip():
         thread_id=st.session_state['thread_id'],
         assistant_id=assistant.id,
     )
+    
+    if st.session_state['initial_greeting_sent'] == True:
+        with chat_container:
+            st.markdown("### Chat History")
+            for role, message in st.session_state['messages']:
+                formatted_role = "Assistant" if role == "Assistant" else "You"
+                st.markdown(f"**{formatted_role}:** {message}")
 
     if run.status == 'completed':
         responses = get_latest_response(st.session_state['thread_id'])
@@ -91,8 +98,11 @@ if st.button("Send") and user_input.strip():
             st.session_state['messages'].append(("Assistant", response))
 
     # Only update the chat container to show new messages
+
+    
     with chat_container:
         st.markdown("### Chat History")
         for role, message in st.session_state['messages']:
             formatted_role = "Assistant" if role == "Assistant" else "You"
             st.markdown(f"**{formatted_role}:** {message}")
+
