@@ -11,26 +11,31 @@ if 'thread_id' not in st.session_state:
     thread = client.beta.threads.create()
     st.session_state['thread_id'] = thread.id
 
-if 'seen_message_ids' not in st.session_state:
-    st.session_state['seen_message_ids'] = set()
+seen_message_ids = set()
 
-if 'conversation_history' not in st.session_state:
-    st.session_state['conversation_history'] = []
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "Assistant", "content": "Chat is loading....."}]
+
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 def get_latest_response(thread_id):
-    """Retrieve and return the latest responses from the assistant."""
+    # Retrieve messages and convert to list
     messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
     messages = list(messages_iterable)
 
-    response_texts = []
     for message in messages:
-        if message.id not in st.session_state['seen_message_ids'] and message.role == "assistant":
+        # Only print new assistant messages
+        if message.id not in seen_message_ids and message.role == "assistant":
+            # Check for 'text' attribute in content
             if message.content and hasattr(message.content[0], 'text'):
-                response_text = message.content[0].text.value
-                response_texts.append(response_text)
-                st.session_state['seen_message_ids'].add(message.id)
-    
-    return response_texts
+                print(f"{message.role}: {message.content[0].text.value}")
+            
+            # Add the message ID to the seen set
+            seen_message_ids.add(message.id)
 
 def send_initial_greeting():
     """Send the initial greeting from the assistant."""
@@ -41,7 +46,7 @@ def send_initial_greeting():
     if run.status == 'completed':
         responses = get_latest_response(st.session_state['thread_id'])
         for response in responses:
-            st.session_state['conversation_history'].append(("Assistant", response))
+            st.session_state['messages'].append(("Assistant", response))
 
 # Run the initial greeting only once
 if 'initial_greeting_sent' not in st.session_state:
@@ -56,7 +61,7 @@ chat_container = st.container()
 
 with chat_container:
     st.markdown("### Chat History")
-    for role, message in st.session_state['conversation_history']:
+    for role, message in st.session_state['messages']:
         formatted_role = "Assistant" if role == "Assistant" else "You"
         st.markdown(f"**{formatted_role}:** {message}")
 
@@ -65,7 +70,7 @@ user_input = st.text_input("Enter your message here:")
 
 if st.button("Send") and user_input.strip():
     # Add the user input to the conversation history
-    st.session_state['conversation_history'].append(("You", user_input))
+    st.session_state['messages'].append(("You", user_input))
 
     # Create user message
     client.beta.threads.messages.create(
@@ -83,11 +88,11 @@ if st.button("Send") and user_input.strip():
     if run.status == 'completed':
         responses = get_latest_response(st.session_state['thread_id'])
         for response in responses:
-            st.session_state['conversation_history'].append(("Assistant", response))
+            st.session_state['messages'].append(("Assistant", response))
 
     # Only update the chat container to show new messages
     with chat_container:
         st.markdown("### Chat History")
-        for role, message in st.session_state['conversation_history']:
+        for role, message in st.session_state['messages']:
             formatted_role = "Assistant" if role == "Assistant" else "You"
             st.markdown(f"**{formatted_role}:** {message}")
