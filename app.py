@@ -1,246 +1,82 @@
-import json
-import time
-import os
-
-import streamlit as st
-import plotly.graph_objects as go
-
 from openai import OpenAI
 
-#######################################
-# PREREQUISITES
-#######################################
 
-st.set_page_config(
-    page_title="Wanderlust",
-    page_icon="🗺️",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
-
-client = OpenAI()
+import streamlit as st
+import time
+import os
 
 assistant_id = client.beta.assistants.retrieve(assistant_id =os.environ['OPENAI_ASS_KEY'] )
 
 
+client = OpenAI()
 
-assistant_state = "assistant"
-thread_state = "thread"
-conversation_state = "conversation"
-last_openai_run_state = "last_openai_run"
-map_state = "map"
-markers_state = "markers"
+if "start_chat" not in st.session_state:
+    st.session_state.start_chat = False
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = None
 
-user_msg_input_key = "input_user_msg"
-
-#######################################
-# SESSION STATE SETUP
-#######################################
-
-if (assistant_state not in st.session_state) or (thread_state not in st.session_state):
-    st.session_state[assistant_state] = client.beta.assistants.retrieve(assistant_id)
-    st.session_state[thread_state] = client.beta.threads.create()
-
-if conversation_state not in st.session_state:
-    st.session_state[conversation_state] = []
-
-if last_openai_run_state not in st.session_state:
-    st.session_state[last_openai_run_state] = None
-
-if map_state not in st.session_state:
-    st.session_state[map_state] = {
-        "latitude": 39.949610,
-        "longitude": -75.150282,
-        "zoom": 16,
-    }
-
-if markers_state not in st.session_state:
-    st.session_state[markers_state] = None
-
-#######################################
-# TOOLS SETUP
-#######################################
+st.set_page_config(page_title="CatGPT", page_icon=":speech_balloon:")
 
 
-def update_map_state(latitude, longitude, zoom):
-    """OpenAI tool to update map in-app
-    """
-    st.session_state[map_state] = {
-        "latitude": latitude,
-        "longitude": longitude,
-        "zoom": zoom,
-    }
-    return "Map updated"
+if st.sidebar.button("Start Chat"):
+    st.session_state.start_chat = True
+    thread = client.beta.threads.create()
+    st.session_state.thread_id = thread.id
 
+st.title("CatGPT like Chatbot")
+st.write("Meow Meow Meow Meow Meow Meow I am a CyberCat")
 
-def add_markers_state(latitudes, longitudes, labels):
-    """OpenAI tool to update markers in-app
-    """
-    st.session_state[markers_state] = {
-        "lat": latitudes,
-        "lon": longitudes,
-        "text": labels,
-    }
-    return "Markers added"
+if st.button("Exit Chat"):
+    st.session_state.messages = []  # Clear the chat history
+    st.session_state.start_chat = False  # Reset the chat state
+    st.session_state.thread_id = None
 
+if st.session_state.start_chat:
+    if "openai_model" not in st.session_state:
+        st.session_state.openai_model = "gpt-4-1106-preview"
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-tool_to_function = {
-    "update_map": update_map_state,
-    "add_markers": add_markers_state,
-}
+    if prompt := st.chat_input("Meow Meow?"):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-#######################################
-# HELPERS
-#######################################
+        client.beta.threads.messages.create(
+                thread_id=st.session_state.thread_id,
+                role="user",
+                content=prompt
+            )
+        
+        run = client.beta.threads.runs.create(
+            thread_id=st.session_state.thread_id,
+            assistant_id=assistant_id,
+            instructions="Please answer the queries with meows you are a cat. Just MEOW a lot! MEOW ONLY, you are only allowed 4 english words and rest of answer must be various MEOW only"
+        )
 
-
-def get_assistant_id():
-    return st.session_state[assistant_state].id
-
-
-def get_thread_id():
-    return st.session_state[thread_state].id
-
-
-def get_run_id():
-    return st.session_state[last_openai_run_state].id
-
-
-def on_text_input(status_placeholder):
-    """Callback method for any chat_input value change
-    """
-    if st.session_state[user_msg_input_key] == "":
-        return
-
-    client.beta.threads.messages.create(
-        thread_id=get_thread_id(),
-        role="user",
-        content=st.session_state[user_msg_input_key],
-    )
-    st.session_state[last_openai_run_state] = client.beta.threads.runs.create(
-        assistant_id=get_assistant_id(),
-        thread_id=get_thread_id(),
-    )
-
-    completed = False
-
-    # Polling
-    with status_placeholder.status("Computing Assistant answer") as status_container:
-        st.write(f"Launching run {get_run_id()}")
-
-        while not completed:
+        while run.status != 'completed':
+            time.sleep(1)
             run = client.beta.threads.runs.retrieve(
-                thread_id=get_thread_id(),
-                run_id=get_run_id(),
+                thread_id=st.session_state.thread_id,
+                run_id=run.id
             )
-
-            if run.status == "requires_action":
-                tools_output = []
-                for tool_call in run.required_action.submit_tool_outputs.tool_calls:
-                    f = tool_call.function
-                    print(f)
-                    f_name = f.name
-                    f_args = json.loads(f.arguments)
-
-                    st.write(f"Launching function {f_name} with args {f_args}")
-                    tool_result = tool_to_function[f_name](**f_args)
-                    tools_output.append(
-                        {
-                            "tool_call_id": tool_call.id,
-                            "output": tool_result,
-                        }
-                    )
-                st.write(f"Will submit {tools_output}")
-                client.beta.threads.runs.submit_tool_outputs(
-                    thread_id=get_thread_id(),
-                    run_id=get_run_id(),
-                    tool_outputs=tools_output,
-                )
-
-            if run.status == "completed":
-                st.write(f"Completed run {get_run_id()}")
-                status_container.update(label="Assistant is done", state="complete")
-                completed = True
-
-            else:
-                time.sleep(0.1)
-
-    st.session_state[conversation_state] = [
-        (m.role, m.content[0].text.value)
-        for m in client.beta.threads.messages.list(get_thread_id()).data
-    ]
-
-
-def on_reset_thread():
-    client.beta.threads.delete(get_thread_id())
-    st.session_state[thread_state] = client.beta.threads.create()
-    st.session_state[conversation_state] = []
-    st.session_state[last_openai_run_state] = None
-
-
-#######################################
-# SIDEBAR
-#######################################
-
-with st.sidebar:
-    st.header("Debug")
-    st.write(st.session_state.to_dict())
-
-    st.button("Reset Thread", on_click=on_reset_thread)
-
-#######################################
-# MAIN
-#######################################
-
-st.title("Wanderlust")
-left_col, right_col = st.columns(2)
-
-with left_col:
-    with st.container():
-        for role, message in st.session_state[conversation_state]:
-            with st.chat_message(role):
-                st.write(message)
-    status_placeholder = st.empty()
-
-with right_col:
-    fig = go.Figure(
-        go.Scattermapbox(
-            mode="markers",
+        messages = client.beta.threads.messages.list(
+            thread_id=st.session_state.thread_id
         )
-    )
-    if st.session_state[markers_state] is not None:
-        fig.add_trace(
-            go.Scattermapbox(
-                mode="markers",
-                marker=go.scattermapbox.Marker(
-                    size=24,
-                    color="red",
-                ),
-                lat=st.session_state[markers_state]["lat"],
-                lon=st.session_state[markers_state]["lon"],
-                text=st.session_state[markers_state]["text"],
-            )
-        )
-    fig.update_layout(
-        margin=dict(l=0, r=0, t=0, b=0),
-        mapbox=dict(
-            accesstoken=st.secrets["MAPBOX_TOKEN"],
-            center=go.layout.mapbox.Center(
-                lat=st.session_state[map_state]["latitude"],
-                lon=st.session_state[map_state]["longitude"],
-            ),
-            pitch=0,
-            zoom=st.session_state[map_state]["zoom"],
-        ),
-        height=600,
-    )
-    st.plotly_chart(
-        fig, config={"displayModeBar": False}, use_container_width=True, key="plotly"
-    )
 
-st.chat_input(
-    placeholder="Ask your question here",
-    key=user_msg_input_key,
-    on_submit=on_text_input,
-    args=(status_placeholder,),
-)
+        # Process and display assistant messages
+        assistant_messages_for_run = [
+            message for message in messages 
+            if message.run_id == run.id and message.role == "assistant"
+        ]
+        for message in assistant_messages_for_run:
+            st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
+            with st.chat_message("assistant"):
+                st.markdown(message.content[0].text.value)
+
+else:
+    st.write("Click 'Start Chat' to begin.")
