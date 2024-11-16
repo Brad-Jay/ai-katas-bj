@@ -10,10 +10,6 @@ assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_
 if 'thread_id' not in st.session_state:
     thread = client.beta.threads.create()
     st.session_state['thread_id'] = thread.id
-    run = client.beta.threads.runs.create_and_poll(
-    thread_id=thread.id,
-    assistant_id=assistant.id,
-)
 
 seen_message_ids = set()
 
@@ -27,19 +23,22 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 def get_latest_response(thread_id):
-    # Retrieve messages and convert to list
+    """Retrieve and return the latest assistant responses."""
     messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
     messages = list(messages_iterable)
 
+    responses = []
     for message in messages:
         # Only print new assistant messages
         if message.id not in seen_message_ids and message.role == "assistant":
             # Check for 'text' attribute in content
             if message.content and hasattr(message.content[0], 'text'):
-                print(f"{message.role}: {message.content[0].text.value}")
+                responses.append(message.content[0].text.value)
             
             # Add the message ID to the seen set
             seen_message_ids.add(message.id)
+
+    return responses  # Return the list of responses
 
 def send_initial_greeting():
     """Send the initial greeting from the assistant."""
@@ -50,7 +49,7 @@ def send_initial_greeting():
     if run.status == 'completed':
         responses = get_latest_response(st.session_state['thread_id'])
         for response in responses:
-            st.session_state['messages'].append(("Assistant", response))
+            st.session_state['messages'].append({"role": "Assistant", "content": response})
 
 # Run the initial greeting only once
 if 'initial_greeting_sent' not in st.session_state:
@@ -65,16 +64,16 @@ chat_container = st.container()
 
 with chat_container:
     st.markdown("### Chat History")
-    for role, message in st.session_state['messages']:
-        formatted_role = "Assistant" if role == "Assistant" else "You"
-        st.markdown(f"**{formatted_role}:** {message}")
+    for message in st.session_state['messages']:
+        formatted_role = "Assistant" if message["role"] == "Assistant" else "You"
+        st.markdown(f"**{formatted_role}:** {message['content']}")
 
 # Input box and button
 user_input = st.text_input("Enter your message here:")
 
 if st.button("Send") and user_input.strip():
     # Add the user input to the conversation history
-    st.session_state['messages'].append(("You", user_input))
+    st.session_state['messages'].append({"role": "You", "content": user_input})
 
     # Create user message
     client.beta.threads.messages.create(
@@ -88,25 +87,15 @@ if st.button("Send") and user_input.strip():
         thread_id=st.session_state['thread_id'],
         assistant_id=assistant.id,
     )
-    
-    if st.session_state['initial_greeting_sent'] == True:
-        with chat_container:
-            st.markdown("### Chat History")
-            for role, message in st.session_state['messages']:
-                formatted_role = "Assistant" if role == "Assistant" else "You"
-                st.markdown(f"**{formatted_role}:** {message}")
 
     if run.status == 'completed':
         responses = get_latest_response(st.session_state['thread_id'])
         for response in responses:
-            st.session_state['messages'].append(("Assistant", response))
+            st.session_state['messages'].append({"role": "Assistant", "content": response})
 
-    # Only update the chat container to show new messages
-
-    
+    # Render updated chat history
     with chat_container:
         st.markdown("### Chat History")
-        for role, message in st.session_state['messages']:
-            formatted_role = "Assistant" if role == "Assistant" else "You"
-            st.markdown(f"**{formatted_role}:** {message}")
-
+        for message in st.session_state['messages']:
+            formatted_role = "Assistant" if message["role"] == "Assistant" else "You"
+            st.markdown(f"**{formatted_role}:** {message['content']}")
