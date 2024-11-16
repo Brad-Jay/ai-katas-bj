@@ -49,19 +49,14 @@ if run.status == 'completed' and not st.session_state['chat_history']:
 st.title("Chatbot Interface")
 
 # Display chat history
-chat_container = st.container()
-with chat_container:
-    for chat in st.session_state['chat_history']:
-        if chat['role'] == 'user':
-            st.markdown(f"**You:** {chat['content']}")
-        else:
-            st.markdown(f"**Assistant:** {chat['content']}")
-
-# Create a placeholder for the input box
-input_placeholder = st.empty()
+for chat in st.session_state['chat_history']:
+    if chat['role'] == 'user':
+        st.markdown(f"**You:** {chat['content']}")
+    else:
+        st.markdown(f"**Assistant:** {chat['content']}")
 
 # Input box for user input
-user_input = input_placeholder.text_input("Enter your message:", key="input")
+user_input = st.text_input("Enter your message:")
 
 if user_input:
     # Add user input to chat history
@@ -87,4 +82,4 @@ if user_input:
             st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
 
     # Clear the input box after submission
-    input_placeholder.text_input("Enter your message:", value="", key="new_input")
+    st.experimental_rerun()
