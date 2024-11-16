@@ -1,43 +1,76 @@
-import openai
+import os
 import streamlit as st
+from openai import OpenAI
 
-st.title("IAS is Winner~~~~")
+# Initialize the OpenAI client
+client = OpenAI()
+assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_KEY'])
 
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Create a thread (Conversation instance)
+thread = client.beta.threads.create()
 
-if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-3.5-turbo"  # or "gpt-3.5-turbo" if using GPT-3.5
+# Set to track processed message IDs
+seen_message_ids = set()
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": "Hey, I am your AI assistant. How can I help you?"}]
+def get_latest_response(thread_id):
+    """Retrieve and display the latest responses from the assistant."""
+    messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
+    messages = list(messages_iterable)
 
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    response_texts = []
+    for message in messages:
+        if message.id not in seen_message_ids and message.role == "assistant":
+            if message.content and hasattr(message.content[0], 'text'):
+                response_texts.append(message.content[0].text.value)
+            seen_message_ids.add(message.id)
+    
+    return response_texts
 
-# React to user input
-prompt = st.chat_input("What is up?")
-if prompt:
-    # Display user message in chat message container
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# Streamlit UI
+st.title("OpenAI Chatbot with Streamlit")
 
-    # Generate a response
-    try:
-        response = openai.ChatCompletion.create(
-            model=st.session_state["openai_model"],
-            messages=st.session_state.messages
+# Text input for user query
+user_input = st.text_input("Enter your message here:", "")
+
+# Button to send user query
+if st.button("Send"):
+    if user_input:
+        # Display user input
+        st.write(f"**You:** {user_input}")
+        
+        # Create a new message in the thread with the user's input
+        client.beta.threads.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=user_input
         )
-        assistant_reply = response['choices'][0]['message']['content']
 
-        with st.chat_message("assistant"):
-            st.markdown(assistant_reply)
+        # Poll the thread to process the user's input
+        run = client.beta.threads.runs.create_and_poll(
+            thread_id=thread.id,
+            assistant_id=assistant.id,
+        )
 
-        # Add assistant's reply to chat history
-        st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
-    except Exception as e:
-        st.error(f"Error: {e}")
+        # Get and display the new assistant responses
+        if run.status == 'completed':
+            responses = get_latest_response(thread.id)
+            for response in responses:
+                st.write(f"**Assistant:** {response}")
+        else:
+            st.write("The assistant is still thinking...")
+
+# Keep the chat history visible
+st.write("## Chat History")
+
+# Function to display chat history
+def display_chat_history():
+    messages_iterable = client.beta.threads.messages.list(thread_id=thread.id)
+    messages = list(messages_iterable)
+
+    for message in messages:
+        role = "You" if message.role == "user" else "Assistant"
+        if message.content and hasattr(message.content[0], 'text'):
+            st.write(f"**{role}:** {message.content[0].text.value}")
+
+# Call the function to display the chat history
+display_chat_history()
