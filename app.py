@@ -35,44 +35,51 @@ run = client.beta.threads.runs.create_and_poll(
     assistant_id=assistant.id,
 )
 
-# Streamlit app interface
-st.title("Chatbot Interface")
-
 # Initialize session state for chat history
 if 'chat_history' not in st.session_state:
     st.session_state['chat_history'] = []
 
+# Check if the initial run was successful and get setup response
+if run.status == 'completed' and not st.session_state['chat_history']:
+    initial_responses = get_latest_response(thread.id)
+    for response in initial_responses:
+        st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
+
+# Streamlit app interface
+st.title("Chatbot Interface")
+
 # Display chat history
 for chat in st.session_state['chat_history']:
-    st.write(f"{chat['role']}: {chat['content']}")
+    if chat['role'] == 'user':
+        st.markdown(f"**You:** {chat['content']}")
+    else:
+        st.markdown(f"**Assistant:** {chat['content']}")
 
 # Input box for user input
-user_input = st.text_input("Enter something (type 'exit' to end):")
+user_input = st.text_input("Enter your message:")
 
 if user_input:
-    if user_input.lower() == 'exit':
-        st.write("Exiting the loop. Goodbye!")
-    else:
-        # Add user input to chat history
-        st.session_state['chat_history'].append({'role': 'user', 'content': user_input})
-        st.write(f"user: {user_input}")
+    # Add user input to chat history
+    st.session_state['chat_history'].append({'role': 'user', 'content': user_input})
 
-        # Create a new message in the thread with the user's input
-        client.beta.threads.messages.create(
-            thread_id=thread.id,
-            role="user",
-            content=user_input
-        )
+    # Create a new message in the thread with the user's input
+    client.beta.threads.messages.create(
+        thread_id=thread.id,
+        role="user",
+        content=user_input
+    )
 
-        # Poll the thread to process the user's input
-        run = client.beta.threads.runs.create_and_poll(
-            thread_id=thread.id,
-            assistant_id=assistant.id,
-        )
+    # Poll the thread to process the user's input
+    run = client.beta.threads.runs.create_and_poll(
+        thread_id=thread.id,
+        assistant_id=assistant.id,
+    )
 
-        # Get only the new assistant responses
-        if run.status == 'completed':
-            responses = get_latest_response(thread.id)
-            for response in responses:
-                st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
-                st.write(f"assistant: {response}")
+    # Get only the new assistant responses
+    if run.status == 'completed':
+        responses = get_latest_response(thread.id)
+        for response in responses:
+            st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
+
+    # Clear the input box after submission
+    st.experimental_rerun()
