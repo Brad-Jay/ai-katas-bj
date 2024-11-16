@@ -8,62 +8,65 @@ assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_
 
 # Create a persistent thread only once when the app starts
 if 'thread_id' not in st.session_state:
-    # Create a thread (Conversation instance) only once
     thread = client.beta.threads.create()
     st.session_state['thread_id'] = thread.id
 
 # Set to track processed message IDs
-seen_message_ids = set()
-
-def get_latest_response(thread_id):
-    """Retrieve and display the latest responses from the assistant."""
-    messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
-    messages = list(messages_iterable)
-
-    response_texts = []
-    for message in messages:
-        if message.id not in seen_message_ids and message.role == "assistant":
-            if message.content and hasattr(message.content[0], 'text'):
-                response_texts.append(message.content[0].text.value)
-            seen_message_ids.add(message.id)
-    
-    return response_texts
-
-# Initialize Streamlit UI
-st.title("OpenAI Chatbot with Streamlit")
+if 'seen_message_ids' not in st.session_state:
+    st.session_state['seen_message_ids'] = set()
 
 # Initialize conversation history in Streamlit's session state
 if 'conversation_history' not in st.session_state:
     st.session_state['conversation_history'] = []
 
-# Start the assistant and send an initial greeting if it hasn't been sent yet
-if 'initial_greeting_sent' not in st.session_state:
-    # Run the assistant's initial greeting message
+def get_latest_response(thread_id):
+    """Retrieve and return the latest responses from the assistant."""
+    messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
+    messages = list(messages_iterable)
+
+    response_texts = []
+    for message in messages:
+        if message.id not in st.session_state['seen_message_ids'] and message.role == "assistant":
+            if message.content and hasattr(message.content[0], 'text'):
+                response_text = message.content[0].text.value
+                response_texts.append(response_text)
+                st.session_state['seen_message_ids'].add(message.id)
+    
+    return response_texts
+
+def send_initial_greeting():
+    """Send the initial greeting from the assistant."""
     run = client.beta.threads.runs.create_and_poll(
         thread_id=st.session_state['thread_id'],
         assistant_id=assistant.id,
     )
-
-    # If the run is successful, capture the initial greeting
     if run.status == 'completed':
-        initial_responses = get_latest_response(st.session_state['thread_id'])
-        for response in initial_responses:
+        responses = get_latest_response(st.session_state['thread_id'])
+        for response in responses:
             st.session_state['conversation_history'].append(("Assistant", response))
             st.write(f"**Assistant:** {response}")
 
+# Run the initial greeting only once
+if 'initial_greeting_sent' not in st.session_state:
+    send_initial_greeting()
     st.session_state['initial_greeting_sent'] = True
 
-# Display chat history if there's any
-st.write("## Chat History")
+# UI rendering and input handling
+st.title("OpenAI Chatbot with Streamlit")
+st.markdown("### Chat History")
+
+# Display chat history
 for role, message in st.session_state['conversation_history']:
-    st.write(f"**{role}:** {message}")
+    formatted_role = "Assistant" if role == "Assistant" else "You"
+    st.markdown(f"**{formatted_role}:** {message}")
 
 # Text input for user query
-user_input = st.text_input("Enter your message here:", "")
+user_input = st.text_input("Enter your message here:")
 
 # Button to send user query
 if st.button("Send") and user_input:
-    # Display user input
+    # Add the user input to the conversation history
+    st.session_state['conversation_history'].append(("You", user_input))
     st.write(f"**You:** {user_input}")
 
     # Create a new message in the persistent thread with the user's input
@@ -85,6 +88,3 @@ if st.button("Send") and user_input:
         for response in responses:
             st.session_state['conversation_history'].append(("Assistant", response))
             st.write(f"**Assistant:** {response}")
-
-    # Add the user input to the conversation history
-    st.session_state['conversation_history'].append(("You", user_input))
