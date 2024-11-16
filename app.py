@@ -6,8 +6,11 @@ from openai import OpenAI
 client = OpenAI()
 assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_KEY'])
 
-# Create a thread (Conversation instance)
-thread = client.beta.threads.create()
+# Create a persistent thread only once when the app starts
+if 'thread_id' not in st.session_state:
+    # Create a thread (Conversation instance) only once
+    thread = client.beta.threads.create()
+    st.session_state['thread_id'] = thread.id
 
 # Set to track processed message IDs
 seen_message_ids = set()
@@ -37,13 +40,13 @@ if 'conversation_history' not in st.session_state:
 if 'initial_greeting_sent' not in st.session_state:
     # Run the assistant's initial greeting message
     run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
+        thread_id=st.session_state['thread_id'],
         assistant_id=assistant.id,
     )
 
     # If the run is successful, capture the initial greeting
     if run.status == 'completed':
-        initial_responses = get_latest_response(thread.id)
+        initial_responses = get_latest_response(st.session_state['thread_id'])
         for response in initial_responses:
             st.session_state['conversation_history'].append(("Assistant", response))
             st.write(f"**Assistant:** {response}")
@@ -63,22 +66,22 @@ if st.button("Send") and user_input:
     # Display user input
     st.write(f"**You:** {user_input}")
 
-    # Create a new message in the thread with the user's input
+    # Create a new message in the persistent thread with the user's input
     client.beta.threads.messages.create(
-        thread_id=thread.id,
+        thread_id=st.session_state['thread_id'],
         role="user",
         content=user_input
     )
 
     # Poll the thread to process the user's input
     run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
+        thread_id=st.session_state['thread_id'],
         assistant_id=assistant.id,
     )
 
     # Get and display the new assistant responses
     if run.status == 'completed':
-        responses = get_latest_response(thread.id)
+        responses = get_latest_response(st.session_state['thread_id'])
         for response in responses:
             st.session_state['conversation_history'].append(("Assistant", response))
             st.write(f"**Assistant:** {response}")
