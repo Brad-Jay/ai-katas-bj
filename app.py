@@ -25,8 +25,10 @@ def get_latest_response(thread_id):
     response_texts = []
     for message in messages:
         if message.id not in st.session_state['seen_message_ids'] and message.role == "assistant":
-            response_texts.append(message.content[0].text.value)
-            st.session_state['seen_message_ids'].add(message.id)
+            if message.content and hasattr(message.content[0], 'text'):
+                response_text = message.content[0].text.value
+                response_texts.append(response_text)
+                st.session_state['seen_message_ids'].add(message.id)
     
     return response_texts
 
@@ -49,17 +51,16 @@ if 'initial_greeting_sent' not in st.session_state:
 # UI rendering
 st.title("OpenAI Chatbot with Streamlit")
 
-# Container for chat history to allow dynamic updating
-chat_container = st.empty()
+# Use a placeholder for the chat history
+chat_container = st.container()
 
-# Display chat history
-with chat_container.container():
+with chat_container:
     st.markdown("### Chat History")
     for role, message in st.session_state['conversation_history']:
         formatted_role = "Assistant" if role == "Assistant" else "You"
         st.markdown(f"**{formatted_role}:** {message}")
 
-# Input and send button at the bottom
+# Input box and button
 user_input = st.text_input("Enter your message here:")
 
 if st.button("Send") and user_input.strip():
@@ -84,5 +85,9 @@ if st.button("Send") and user_input.strip():
         for response in responses:
             st.session_state['conversation_history'].append(("Assistant", response))
 
-    # Clear the input box after sending and update the chat display
-    st.experimental_rerun()
+    # Only update the chat container to show new messages
+    with chat_container:
+        st.markdown("### Chat History")
+        for role, message in st.session_state['conversation_history']:
+            formatted_role = "Assistant" if role == "Assistant" else "You"
+            st.markdown(f"**{formatted_role}:** {message}")
