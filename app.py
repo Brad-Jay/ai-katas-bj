@@ -1,5 +1,6 @@
 import json
 import time
+import os
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -20,6 +21,7 @@ st.set_page_config(
 client = OpenAI()
 
 assistant_id = client.beta.assistants.retrieve(assistant_id =os.environ['OPENAI_ASS_KEY'] )
+
 
 
 assistant_state = "assistant"
