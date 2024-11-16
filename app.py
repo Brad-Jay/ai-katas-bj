@@ -1,6 +1,4 @@
 from openai import OpenAI
-
-
 import streamlit as st
 import time
 import os
@@ -16,21 +14,16 @@ if "start_chat" not in st.session_state:
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = None
 
-st.set_page_config(page_title="CatGPT", page_icon=":speech_balloon:")
+st.set_page_config(page_title="ShopWise", page_icon=":speech_balloon:")
 
 
-if st.sidebar.button("Start Chat"):
+if st.button("Start Chat"):
     st.session_state.start_chat = True
     thread = client.beta.threads.create()
     st.session_state.thread_id = thread.id
 
-st.title("CatGPT like Chatbot")
-st.write("Meow Meow Meow Meow Meow Meow I am a CyberCat")
+st.title("ShopWise Genie")
 
-if st.button("Exit Chat"):
-    st.session_state.messages = []  # Clear the chat history
-    st.session_state.start_chat = False  # Reset the chat state
-    st.session_state.thread_id = None
 
 if st.session_state.start_chat:
     if "openai_model" not in st.session_state:
@@ -42,7 +35,7 @@ if st.session_state.start_chat:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Meow Meow?"):
+    if prompt := st.chat_input("Message"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
