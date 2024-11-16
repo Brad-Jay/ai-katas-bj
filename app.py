@@ -44,47 +44,51 @@ def send_initial_greeting():
         responses = get_latest_response(st.session_state['thread_id'])
         for response in responses:
             st.session_state['conversation_history'].append(("Assistant", response))
-            st.write(f"**Assistant:** {response}")
 
 # Run the initial greeting only once
 if 'initial_greeting_sent' not in st.session_state:
     send_initial_greeting()
     st.session_state['initial_greeting_sent'] = True
 
-# UI rendering and input handling
+# UI rendering
 st.title("OpenAI Chatbot with Streamlit")
-st.markdown("### Chat History")
 
-# Display chat history
-for role, message in st.session_state['conversation_history']:
-    formatted_role = "Assistant" if role == "Assistant" else "You"
-    st.markdown(f"**{formatted_role}:** {message}")
+# Create a container for the chat history to allow scrolling
+chat_container = st.container()
+with chat_container:
+    st.markdown("### Chat History")
 
-# Text input for user query
-user_input = st.text_input("Enter your message here:")
+    # Display chat history
+    for role, message in st.session_state['conversation_history']:
+        formatted_role = "Assistant" if role == "Assistant" else "You"
+        st.markdown(f"**{formatted_role}:** {message}")
 
-# Button to send user query
-if st.button("Send") and user_input:
-    # Add the user input to the conversation history
-    st.session_state['conversation_history'].append(("You", user_input))
-    st.write(f"**You:** {user_input}")
+# The input and send button should be outside the chat container to be at the bottom
+input_container = st.container()
+with input_container:
+    # Text input for user query
+    user_input = st.text_input("Enter your message here:")
 
-    # Create a new message in the persistent thread with the user's input
-    client.beta.threads.messages.create(
-        thread_id=st.session_state['thread_id'],
-        role="user",
-        content=user_input
-    )
+    # Button to send user query
+    if st.button("Send") and user_input:
+        # Add the user input to the conversation history
+        st.session_state['conversation_history'].append(("You", user_input))
 
-    # Poll the thread to process the user's input
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=st.session_state['thread_id'],
-        assistant_id=assistant.id,
-    )
+        # Create a new message in the persistent thread with the user's input
+        client.beta.threads.messages.create(
+            thread_id=st.session_state['thread_id'],
+            role="user",
+            content=user_input
+        )
 
-    # Get and display the new assistant responses
-    if run.status == 'completed':
-        responses = get_latest_response(st.session_state['thread_id'])
-        for response in responses:
-            st.session_state['conversation_history'].append(("Assistant", response))
-            st.write(f"**Assistant:** {response}")
+        # Poll the thread to process the user's input
+        run = client.beta.threads.runs.create_and_poll(
+            thread_id=st.session_state['thread_id'],
+            assistant_id=assistant.id,
+        )
+
+        # Get and display the new assistant responses
+        if run.status == 'completed':
+            responses = get_latest_response(st.session_state['thread_id'])
+            for response in responses:
+                st.session_state['conversation_history'].append(("Assistant", response))
