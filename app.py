@@ -1,33 +1,35 @@
+import os
 import streamlit as st
-import openai
+from openai import OpenAI
 
-# Initialize the OpenAI client (make sure your API key is set in environment variables)
-openai.api_key = os.getenv('OPENAI_ASS_KEY')
+# Initialize the OpenAI client
+client = OpenAI()
+assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_KEY'])
 
-# Streamlit UI
+# Create a thread (Conversation instance)
+thread = client.beta.threads.create()
+
+# Set to track processed message IDs
+seen_message_ids = set()
+
+def get_latest_response(thread_id):
+    """Retrieve and display the latest responses from the assistant."""
+    messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
+    messages = list(messages_iterable)
+
+    response_texts = []
+    for message in messages:
+        if message.id not in seen_message_ids and message.role == "assistant":
+            if message.content and hasattr(message.content[0], 'text'):
+                response_texts.append(message.content[0].text.value)
+            seen_message_ids.add(message.id)
+    
+    return response_texts
+
+# Streamlit UI setup
 st.title("OpenAI Chatbot with Streamlit")
 
-# Function to interact with OpenAI API
-def get_openai_response(user_input, conversation_history):
-    # Use the conversation history to maintain context
-    messages = conversation_history + [{"role": "user", "content": user_input}]
-    
-    # Call the OpenAI Chat API
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",  # or "gpt-4" depending on your setup
-        messages=messages
-    )
-    
-    # Get the assistant's reply
-    assistant_reply = response['choices'][0]['message']['content']
-    
-    # Update conversation history with the assistant's reply
-    conversation_history.append({"role": "user", "content": user_input})
-    conversation_history.append({"role": "assistant", "content": assistant_reply})
-    
-    return assistant_reply, conversation_history
-
-# Initialize conversation history
+# Initialize conversation history in Streamlit's session state
 if 'conversation_history' not in st.session_state:
     st.session_state['conversation_history'] = []
 
@@ -40,16 +42,30 @@ if st.button("Send"):
         # Display user input
         st.write(f"**You:** {user_input}")
         
-        # Get OpenAI response and update conversation history
-        assistant_reply, st.session_state['conversation_history'] = get_openai_response(
-            user_input, st.session_state['conversation_history']
+        # Create a new message in the thread with the user's input
+        client.beta.threads.messages.create(
+            thread_id=thread.id,
+            role="user",
+            content=user_input
         )
 
-        # Display the assistant's reply
-        st.write(f"**Assistant:** {assistant_reply}")
+        # Poll the thread to process the user's input
+        run = client.beta.threads.runs.create_and_poll(
+            thread_id=thread.id,
+            assistant_id=assistant.id,
+        )
+
+        # Get and display the new assistant responses
+        if run.status == 'completed':
+            responses = get_latest_response(thread.id)
+            for response in responses:
+                st.session_state['conversation_history'].append(("Assistant", response))
+                st.write(f"**Assistant:** {response}")
+
+        # Add the user input to the conversation history
+        st.session_state['conversation_history'].append(("You", user_input))
 
 # Keep the chat history visible
 st.write("## Chat History")
-for message in st.session_state['conversation_history']:
-    role = "You" if message['role'] == "user" else "Assistant"
-    st.write(f"**{role}:** {message['content']}")
+for role, message in st.session_state['conversation_history']:
+    st.write(f"**{role}:** {message}")
