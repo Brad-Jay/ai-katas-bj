@@ -23,7 +23,7 @@ def get_latest_response(thread_id):
         if message.id not in seen_message_ids and message.role == "assistant":
             # Check for 'text' attribute in content
             if message.content and hasattr(message.content[0], 'text'):
-                responses.append(f"{message.role}: {message.content[0].text.value}")
+                responses.append(message.content[0].text.value)
             
             # Add the message ID to the seen set
             seen_message_ids.add(message.id)
@@ -35,14 +35,16 @@ run = client.beta.threads.runs.create_and_poll(
     assistant_id=assistant.id,
 )
 
-# Check if the initial run was successful and get setup response
-if run.status == 'completed':
-    initial_responses = get_latest_response(thread.id)
-    for response in initial_responses:
-        st.write(response)
-
 # Streamlit app interface
 st.title("Chatbot Interface")
+
+# Initialize session state for chat history
+if 'chat_history' not in st.session_state:
+    st.session_state['chat_history'] = []
+
+# Display chat history
+for chat in st.session_state['chat_history']:
+    st.chat_message(chat['role'], chat['content'])
 
 # Input box for user input
 user_input = st.text_input("Enter something (type 'exit' to end):")
@@ -51,8 +53,9 @@ if user_input:
     if user_input.lower() == 'exit':
         st.write("Exiting the loop. Goodbye!")
     else:
-        # Display the user input
-        st.write(f"user: {user_input}")
+        # Add user input to chat history
+        st.session_state['chat_history'].append({'role': 'user', 'content': user_input})
+        st.chat_message('user', user_input)
 
         # Create a new message in the thread with the user's input
         client.beta.threads.messages.create(
@@ -71,4 +74,5 @@ if user_input:
         if run.status == 'completed':
             responses = get_latest_response(thread.id)
             for response in responses:
-                st.write(response)
+                st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
+                st.chat_message('assistant', response)
