@@ -10,6 +10,10 @@ assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_
 if 'thread_id' not in st.session_state:
     thread = client.beta.threads.create()
     st.session_state['thread_id'] = thread.id
+    run = client.beta.threads.runs.create_and_poll(
+    thread_id=thread.id,
+    assistant_id=assistant.id,
+)
 
 seen_message_ids = set()
 
