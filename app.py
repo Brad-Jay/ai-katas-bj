@@ -1,88 +1,244 @@
+import json
+import time
+
 import streamlit as st
+import plotly.graph_objects as go
+
 from openai import OpenAI
-import os
 
-# Initialize OpenAI client
-client = OpenAI()
-assistant = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_KEY'])
+#######################################
+# PREREQUISITES
+#######################################
 
-# Create a thread (Conversation instance)
-thread = client.beta.threads.create()
-
-# Set to track processed message IDs
-seen_message_ids = set()
-
-def get_latest_response(thread_id):
-    # Retrieve messages and convert to list
-    messages_iterable = client.beta.threads.messages.list(thread_id=thread_id)
-    messages = list(messages_iterable)
-
-    responses = []
-    for message in messages:
-        # Only get new assistant messages
-        if message.id not in seen_message_ids and message.role == "assistant":
-            # Check for 'text' attribute in content
-            if message.content and hasattr(message.content[0], 'text'):
-                responses.append(message.content[0].text.value)
-            
-            # Add the message ID to the seen set
-            seen_message_ids.add(message.id)
-    return responses
-
-# Start the assistant
-run = client.beta.threads.runs.create_and_poll(
-    thread_id=thread.id,
-    assistant_id=assistant.id,
+st.set_page_config(
+    page_title="Wanderlust",
+    page_icon="🗺️",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-# Initialize session state for chat history
-if 'chat_history' not in st.session_state:
-    st.session_state['chat_history'] = []
+client = OpenAI()
 
-# Check if the initial run was successful and get setup response
-if run.status == 'completed' and not st.session_state['chat_history']:
-    initial_responses = get_latest_response(thread.id)
-    for response in initial_responses:
-        st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
+assistant_id = client.beta.assistants.retrieve(assistant_id =os.environ['OPENAI_ASS_KEY'] )
 
-# Streamlit app interface
-st.title("Chatbot Interface")
 
-# Display chat history
-for chat in st.session_state['chat_history']:
-    if chat['role'] == 'user':
-        st.markdown(f"**You:** {chat['content']}")
-    else:
-        st.markdown(f"**Assistant:** {chat['content']}")
+assistant_state = "assistant"
+thread_state = "thread"
+conversation_state = "conversation"
+last_openai_run_state = "last_openai_run"
+map_state = "map"
+markers_state = "markers"
 
-# Create a placeholder for the input box
-input_placeholder = st.empty()
+user_msg_input_key = "input_user_msg"
 
-# Input box for user input
-user_input = input_placeholder.text_input("Enter your message:", key="input")
+#######################################
+# SESSION STATE SETUP
+#######################################
 
-if user_input:
-    # Add user input to chat history
-    st.session_state['chat_history'].append({'role': 'user', 'content': user_input})
+if (assistant_state not in st.session_state) or (thread_state not in st.session_state):
+    st.session_state[assistant_state] = client.beta.assistants.retrieve(assistant_id)
+    st.session_state[thread_state] = client.beta.threads.create()
 
-    # Create a new message in the thread with the user's input
+if conversation_state not in st.session_state:
+    st.session_state[conversation_state] = []
+
+if last_openai_run_state not in st.session_state:
+    st.session_state[last_openai_run_state] = None
+
+if map_state not in st.session_state:
+    st.session_state[map_state] = {
+        "latitude": 39.949610,
+        "longitude": -75.150282,
+        "zoom": 16,
+    }
+
+if markers_state not in st.session_state:
+    st.session_state[markers_state] = None
+
+#######################################
+# TOOLS SETUP
+#######################################
+
+
+def update_map_state(latitude, longitude, zoom):
+    """OpenAI tool to update map in-app
+    """
+    st.session_state[map_state] = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "zoom": zoom,
+    }
+    return "Map updated"
+
+
+def add_markers_state(latitudes, longitudes, labels):
+    """OpenAI tool to update markers in-app
+    """
+    st.session_state[markers_state] = {
+        "lat": latitudes,
+        "lon": longitudes,
+        "text": labels,
+    }
+    return "Markers added"
+
+
+tool_to_function = {
+    "update_map": update_map_state,
+    "add_markers": add_markers_state,
+}
+
+#######################################
+# HELPERS
+#######################################
+
+
+def get_assistant_id():
+    return st.session_state[assistant_state].id
+
+
+def get_thread_id():
+    return st.session_state[thread_state].id
+
+
+def get_run_id():
+    return st.session_state[last_openai_run_state].id
+
+
+def on_text_input(status_placeholder):
+    """Callback method for any chat_input value change
+    """
+    if st.session_state[user_msg_input_key] == "":
+        return
+
     client.beta.threads.messages.create(
-        thread_id=thread.id,
+        thread_id=get_thread_id(),
         role="user",
-        content=user_input
+        content=st.session_state[user_msg_input_key],
+    )
+    st.session_state[last_openai_run_state] = client.beta.threads.runs.create(
+        assistant_id=get_assistant_id(),
+        thread_id=get_thread_id(),
     )
 
-    # Poll the thread to process the user's input
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id,
-        assistant_id=assistant.id,
+    completed = False
+
+    # Polling
+    with status_placeholder.status("Computing Assistant answer") as status_container:
+        st.write(f"Launching run {get_run_id()}")
+
+        while not completed:
+            run = client.beta.threads.runs.retrieve(
+                thread_id=get_thread_id(),
+                run_id=get_run_id(),
+            )
+
+            if run.status == "requires_action":
+                tools_output = []
+                for tool_call in run.required_action.submit_tool_outputs.tool_calls:
+                    f = tool_call.function
+                    print(f)
+                    f_name = f.name
+                    f_args = json.loads(f.arguments)
+
+                    st.write(f"Launching function {f_name} with args {f_args}")
+                    tool_result = tool_to_function[f_name](**f_args)
+                    tools_output.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "output": tool_result,
+                        }
+                    )
+                st.write(f"Will submit {tools_output}")
+                client.beta.threads.runs.submit_tool_outputs(
+                    thread_id=get_thread_id(),
+                    run_id=get_run_id(),
+                    tool_outputs=tools_output,
+                )
+
+            if run.status == "completed":
+                st.write(f"Completed run {get_run_id()}")
+                status_container.update(label="Assistant is done", state="complete")
+                completed = True
+
+            else:
+                time.sleep(0.1)
+
+    st.session_state[conversation_state] = [
+        (m.role, m.content[0].text.value)
+        for m in client.beta.threads.messages.list(get_thread_id()).data
+    ]
+
+
+def on_reset_thread():
+    client.beta.threads.delete(get_thread_id())
+    st.session_state[thread_state] = client.beta.threads.create()
+    st.session_state[conversation_state] = []
+    st.session_state[last_openai_run_state] = None
+
+
+#######################################
+# SIDEBAR
+#######################################
+
+with st.sidebar:
+    st.header("Debug")
+    st.write(st.session_state.to_dict())
+
+    st.button("Reset Thread", on_click=on_reset_thread)
+
+#######################################
+# MAIN
+#######################################
+
+st.title("Wanderlust")
+left_col, right_col = st.columns(2)
+
+with left_col:
+    with st.container():
+        for role, message in st.session_state[conversation_state]:
+            with st.chat_message(role):
+                st.write(message)
+    status_placeholder = st.empty()
+
+with right_col:
+    fig = go.Figure(
+        go.Scattermapbox(
+            mode="markers",
+        )
+    )
+    if st.session_state[markers_state] is not None:
+        fig.add_trace(
+            go.Scattermapbox(
+                mode="markers",
+                marker=go.scattermapbox.Marker(
+                    size=24,
+                    color="red",
+                ),
+                lat=st.session_state[markers_state]["lat"],
+                lon=st.session_state[markers_state]["lon"],
+                text=st.session_state[markers_state]["text"],
+            )
+        )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=0),
+        mapbox=dict(
+            accesstoken=st.secrets["MAPBOX_TOKEN"],
+            center=go.layout.mapbox.Center(
+                lat=st.session_state[map_state]["latitude"],
+                lon=st.session_state[map_state]["longitude"],
+            ),
+            pitch=0,
+            zoom=st.session_state[map_state]["zoom"],
+        ),
+        height=600,
+    )
+    st.plotly_chart(
+        fig, config={"displayModeBar": False}, use_container_width=True, key="plotly"
     )
 
-    # Get only the new assistant responses
-    if run.status == 'completed':
-        responses = get_latest_response(thread.id)
-        for response in responses:
-            st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
-
-    # Clear the input box after submission
-    input_placeholder.text_input("Enter your message:", value="", key="new_input")
+st.chat_input(
+    placeholder="Ask your question here",
+    key=user_msg_input_key,
+    on_submit=on_text_input,
+    args=(status_placeholder,),
+)
