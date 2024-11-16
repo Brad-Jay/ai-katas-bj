@@ -44,7 +44,7 @@ if 'chat_history' not in st.session_state:
 
 # Display chat history
 for chat in st.session_state['chat_history']:
-    st.chat_message(chat['role'], chat['content'])
+    st.write(f"{chat['role']}: {chat['content']}")
 
 # Input box for user input
 user_input = st.text_input("Enter something (type 'exit' to end):")
@@ -55,7 +55,7 @@ if user_input:
     else:
         # Add user input to chat history
         st.session_state['chat_history'].append({'role': 'user', 'content': user_input})
-        st.chat_message('user', user_input)
+        st.write(f"user: {user_input}")
 
         # Create a new message in the thread with the user's input
         client.beta.threads.messages.create(
@@ -75,4 +75,4 @@ if user_input:
             responses = get_latest_response(thread.id)
             for response in responses:
                 st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
-                st.chat_message('assistant', response)
+                st.write(f"assistant: {response}")
