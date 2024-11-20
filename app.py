@@ -21,13 +21,18 @@ if st.button("Start Chat"):
     st.session_state.start_chat = True
     thread = client.beta.threads.create()
     st.session_state.thread_id = thread.id
+    run = client.beta.threads.runs.create(
+    thread_id=st.session_state.thread_id,
+    assistant_id=assistant_id.id,
+            
+        )
 
 st.title("ShopWise Genie")
 
 
 if st.session_state.start_chat:
     if "openai_model" not in st.session_state:
-        st.session_state.openai_model = "gpt-3.5-turbo"
+        st.session_state.openai_model = "gpt-4-turbo"
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
