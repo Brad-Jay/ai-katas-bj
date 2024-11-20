@@ -20,11 +20,6 @@ if st.button("Start Chat"):
     thread = client.beta.threads.create()
     st.session_state.thread_id = thread.id
 
-    # Add a Hello message to the chat interface
-    st.session_state.messages.append({"role": "user", "content": "Hello!"})
-    with st.chat_message("user"):
-        st.markdown("Hello!")
-
     # Send the Hello message to the API
     client.beta.threads.messages.create(
         thread_id=st.session_state.thread_id,
@@ -79,35 +74,4 @@ if st.session_state.start_chat:
         client.beta.threads.messages.create(
             thread_id=st.session_state.thread_id,
             role="user",
-            content=prompt
-        )
-
-        # Start a new run for the user input
-        run = client.beta.threads.runs.create(
-            thread_id=st.session_state.thread_id,
-            assistant_id=assistant_id.id,
-        )
-
-        # Wait for the run to complete
-        while run.status != 'completed':
-            time.sleep(1)
-            run = client.beta.threads.runs.retrieve(
-                thread_id=st.session_state.thread_id,
-                run_id=run.id
-            )
-
-        # Fetch and display the assistant's response
-        messages = client.beta.threads.messages.list(
-            thread_id=st.session_state.thread_id
-        )
-        assistant_messages_for_run = [
-            message for message in messages
-            if message.run_id == run.id and message.role == "assistant"
-        ]
-        for message in assistant_messages_for_run:
-            st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
-            with st.chat_message("assistant"):
-                st.markdown(message.content[0].text.value)
-
-else:
-    st.write("Click 'Start Chat' to begin.")
+            cont
