@@ -50,7 +50,18 @@ if st.button("Start Chat"):
             run_id=run.id
         )
 
-
+    # Fetch and display any assistant messages in response to the simulated user message
+    messages = client.beta.threads.messages.list(
+        thread_id=st.session_state.thread_id
+    )
+    assistant_messages_for_run = [
+        message for message in messages
+        if message.run_id == run.id and message.role == "assistant"
+    ]
+    for message in assistant_messages_for_run:
+        st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
+        with st.chat_message("assistant"):
+            st.markdown(message.content[0].text.value)
 
 st.title("ShopWise Genie")
 
