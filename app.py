@@ -1,11 +1,9 @@
-
 from openai import OpenAI
 import streamlit as st
 import time
 import os
 
 client = OpenAI()
-assistant_id = client.beta.assistants.retrieve(assistant_id =os.environ['OPENAI_ASS_KEY'] )
 assistant_id = client.beta.assistants.retrieve(assistant_id=os.environ['OPENAI_ASS_KEY'])
 
 if "start_chat" not in st.session_state:
@@ -22,26 +20,28 @@ if st.button("Start Chat"):
     st.session_state.start_chat = True
     thread = client.beta.threads.create()
     st.session_state.thread_id = thread.id
+
     # Simulate a user message (you can change the content)
     simulated_message = "Hello, how are you?"
+
     # Add the simulated user message to the chat interface
     st.session_state.messages.append({"role": "user", "content": simulated_message})
     with st.chat_message("user"):
         st.markdown(simulated_message)
+
     # Send the simulated message to the API
     client.beta.threads.messages.create(
         thread_id=st.session_state.thread_id,
         role="user",
         content=simulated_message
     )
+
     # Start the AI bot run
     run = client.beta.threads.runs.create(
-    thread_id=st.session_state.thread_id,
-    assistant_id=assistant_id.id,
-            
         thread_id=st.session_state.thread_id,
         assistant_id=assistant_id.id,
     )
+
     # Wait for the run to complete
     while run.status != 'completed':
         time.sleep(1)
@@ -50,19 +50,7 @@ if st.button("Start Chat"):
             run_id=run.id
         )
 
-st.title("ShopWise Genie")
-    # Fetch and display any assistant messages in response to the simulated user message
-    messages = client.beta.threads.messages.list(
-        thread_id=st.session_state.thread_id
-    )
-    assistant_messages_for_run = [
-        message for message in messages
-        if message.run_id == run.id and message.role == "assistant"
-    ]
-    for message in assistant_messages_for_run:
-        st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
-        with st.chat_message("assistant"):
-            st.markdown(message.content[0].text.value)
+
 
 st.title("ShopWise Genie")
 
@@ -70,9 +58,7 @@ st.title("ShopWise Genie")
 if st.session_state.start_chat:
     if "openai_model" not in st.session_state:
         st.session_state.openai_model = "gpt-4-turbo"
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
+
     # Display the chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -86,20 +72,15 @@ if st.session_state.start_chat:
 
         # Send the user input to the API
         client.beta.threads.messages.create(
-                thread_id=st.session_state.thread_id,
-                role="user",
-                content=prompt
-            )
-        
             thread_id=st.session_state.thread_id,
             role="user",
             content=prompt
         )
+
         # Start a new run for the user input
         run = client.beta.threads.runs.create(
             thread_id=st.session_state.thread_id,
             assistant_id=assistant_id.id,
-            
         )
 
         # Wait for the run to complete
@@ -109,26 +90,12 @@ if st.session_state.start_chat:
                 thread_id=st.session_state.thread_id,
                 run_id=run.id
             )
-        messages = client.beta.threads.messages.list(
-            thread_id=st.session_state.thread_id
-        )
 
-        # Process and display assistant messages
-        assistant_messages_for_run = [
-            message for message in messages 
-            if message.run_id == run.id and message.role == "assistant"
-        ]
-        for message in assistant_messages_for_run:
-            st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
-            with st.chat_message("assistant"):
-                st.markdown(message.content[0].text.value)
-    else:
         # Fetch and display the assistant's response
         messages = client.beta.threads.messages.list(
             thread_id=st.session_state.thread_id
         )
         assistant_messages_for_run = [
-        message for message in messages
             message for message in messages
             if message.run_id == run.id and message.role == "assistant"
         ]
