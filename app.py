@@ -17,13 +17,13 @@ if "messages" not in st.session_state:
 st.set_page_config(page_title="ShopWise", page_icon=":speech_balloon:")
 
 # When "Start Chat" button is clicked
-if st.button("Start Chat"):
+if st.button("Say Hello!"):
     st.session_state.start_chat = True
     thread = client.beta.threads.create()
     st.session_state.thread_id = thread.id
 
     # Simulate a user message (e.g., initial message)
-    simulated_message = "Hello, how are you?"
+    simulated_message = "Hello!"
 
     # Add the simulated user message if not already present
     if not any(msg["content"] == simulated_message and msg["role"] == "user" for msg in st.session_state.messages):
@@ -119,4 +119,4 @@ if st.session_state.start_chat:
                     st.markdown(message.content[0].text.value)
 
 else:
-    st.write("Click 'Start Chat' to begin.")
+    st.write("Click 'Say Hello!' to begin.")
