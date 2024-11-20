@@ -77,6 +77,9 @@ if st.session_state.start_chat:
             with st.chat_message("assistant"):
                 st.markdown(message.content[0].text.value)
     else:
+        messages = client.beta.threads.messages.list(
+            thread_id=st.session_state.thread_id
+        )
         assistant_messages_for_run = [
         message for message in messages
             if message.run_id == run.id and message.role == "assistant"
