@@ -25,9 +25,9 @@ if st.button("Start Chat"):
     simulated_message = "Hello, how are you?"
 
     # Add the simulated user message to the chat interface
-    #st.session_state.messages.append({"role": "user", "content": simulated_message})
-    #with st.chat_message("user"):
-     #   st.markdown(simulated_message)
+    st.session_state.messages.append({"role": "user", "content": simulated_message})
+    with st.chat_message("user"):
+        st.markdown(simulated_message)
 
     # Send the simulated message to the API
     client.beta.threads.messages.create(
@@ -51,17 +51,17 @@ if st.button("Start Chat"):
         )
 
     # Fetch and display any assistant messages in response to the simulated user message
-   # messages = client.beta.threads.messages.list(
-     #   thread_id=st.session_state.thread_id
+    messages = client.beta.threads.messages.list(
+        thread_id=st.session_state.thread_id
     )
-   # assistant_messages_for_run = [
-      #  message for message in messages
-       # if message.run_id == run.id and message.role == "assistant"
+    assistant_messages_for_run = [
+        message for message in messages
+        if message.run_id == run.id and message.role == "assistant"
     ]
-    #for message in assistant_messages_for_run:
-      #  st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
-      #  with st.chat_message("assistant"):
-        #    st.markdown(message.content[0].text.value)
+    for message in assistant_messages_for_run:
+        st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
+        with st.chat_message("assistant"):
+            st.markdown(message.content[0].text.value)
 
 st.title("ShopWise Genie")
 
@@ -115,5 +115,4 @@ if st.session_state.start_chat:
             with st.chat_message("assistant"):
                 st.markdown(message.content[0].text.value)
 
-else:
-    st.write("Click 'Start Chat' to begin.")
+
