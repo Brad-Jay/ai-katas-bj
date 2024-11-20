@@ -25,10 +25,11 @@ if st.button("Start Chat"):
     thread_id=st.session_state.thread_id,
     assistant_id=assistant_id.id,
         )
-    client.beta.threads.messages.create(
-    thread_id=st.session_state.thread_id,
-    role="user",
-    content="Hello!"
+    if run.status == 'completed':
+        client.beta.threads.messages.create(
+            thread_id=st.session_state.thread_id,
+            role="user",
+            content="Hello!"
             )
 
 st.title("ShopWise Genie")
