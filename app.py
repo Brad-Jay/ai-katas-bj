@@ -76,6 +76,15 @@ if st.session_state.start_chat:
             st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
             with st.chat_message("assistant"):
                 st.markdown(message.content[0].text.value)
+    else:
+        assistant_messages_for_run = [
+        message for message in messages
+            if message.run_id == run.id and message.role == "assistant"
+        ]
+        for message in assistant_messages_for_run:
+            st.session_state.messages.append({"role": "assistant", "content": message.content[0].text.value})
+            with st.chat_message("assistant"):
+                st.markdown(message.content[0].text.value)
 
 else:
     st.write("Click 'Start Chat' to begin.")
